@@ -1,8 +1,14 @@
-FROM openjdk:13-alpine
+
+# ✅ Use supported Java base image
+FROM eclipse-temurin:17-jdk-alpine
 
 VOLUME /tmp
+
+# ✅ Copy built JAR from target folder
 COPY target/*.jar app.jar
 
 ENV PORT 5000
 EXPOSE $PORT
-ENTRYPOINT ["java","-Djava.security.egd=file:/dev/./urandom -Dserver.port=${PORT}","-jar","/app.jar"]
+
+# ✅ Run the application
+ENTRYPOINT ["java","-jar","/app.jar"]
