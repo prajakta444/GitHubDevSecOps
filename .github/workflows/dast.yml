@@ -5,7 +5,6 @@ on:
     inputs:
       image-tag:
         type: string
-        description: 'Docker image to scan'
         required: true
 
   workflow_call:
@@ -20,11 +19,10 @@ env:
 
 jobs:
   dast-scan:
-    name: DAST Scan
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ Login to registry
+      # ✅ Login
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
@@ -32,40 +30,45 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ✅ Run container
+      # ✅ Run app container (host network)
       - name: Run container
         run: |
           docker rm -f demoApp || true
-          docker run -d -p 8080:8080 --name demoApp ${{ env.IMAGE_TAG }}
+          docker run -d --network host --name demoApp ${{ env.IMAGE_TAG }}
 
       # ✅ Debug logs
       - name: Show container logs
         run: docker logs demoApp
 
-      # ✅ Wait for app (FIXED)
-      - name: Wait for container to be ready
+      # ✅ Wait for app
+      - name: Wait for app
         run: |
           for i in {1..40}; do
             if curl -s http://localhost:8080 > /dev/null; then
               echo "App is up!"
               break
             fi
-            echo "Waiting for app..."
+            echo "Waiting..."
             sleep 5
           done
 
-      # ✅ Test app
+      # ✅ Test
       - name: Test endpoint
         run: curl -v http://localhost:8080 || true
 
-      # ✅ IMPORTANT FIX: Use host.docker.internal
-      - name: Run ZAP OWASP full scan
-        uses: zaproxy/action-full-scan@v0.10.0
-        with:
-          target: 'http://host.docker.internal:8080'
-          cmd_options: '-a -J report.json -w report.md -r report.html'
+      # ✅ FIX: Run ZAP in SAME network
+      - name: Run ZAP Scan
+        run: |
+          docker run --rm \
+            --network host \
+            -v $(pwd):/zap/wrk \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-full-scan.py \
+            -t http://localhost:8080 \
+            -r report.html \
+            -J report.json || true
 
-      # ✅ Upload reports
+      # ✅ Upload report
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
@@ -73,10 +76,9 @@ jobs:
           path: |
             report.html
             report.json
-            report.md
 
       # ✅ Cleanup
-      - name: Stop container
+      - name: Cleanup
         if: always()
         run: |
           docker stop demoApp || true
