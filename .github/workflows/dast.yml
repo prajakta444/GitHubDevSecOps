@@ -5,6 +5,7 @@ on:
     inputs:
       image-tag:
         type: string
+        description: 'Docker image to scan'
         required: true
 
   workflow_call:
@@ -23,27 +24,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3   # ✅ upgraded
+      # ✅ Login to registry
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ✅ Start container safely
+      # ✅ Run container
       - name: Run container
         run: |
           docker rm -f demoApp || true
           docker run -d -p 8080:8080 --name demoApp ${{ env.IMAGE_TAG }}
 
-      # ✅ Debug logs (VERY IMPORTANT)
-      - name: Check container logs
+      # ✅ Debug logs
+      - name: Show container logs
         run: docker logs demoApp
 
-      # ✅ FIXED wait logic (no strict 200)
-      - name: Wait for container to start
+      # ✅ Wait for app (FIXED)
+      - name: Wait for container to be ready
         run: |
-          for i in {1..30}; do
+          for i in {1..40}; do
             if curl -s http://localhost:8080 > /dev/null; then
               echo "App is up!"
               break
@@ -52,19 +54,19 @@ jobs:
             sleep 5
           done
 
-      # ✅ Test endpoint (optional)
-      - name: Test container
+      # ✅ Test app
+      - name: Test endpoint
         run: curl -v http://localhost:8080 || true
 
-      # ✅ Updated ZAP version
+      # ✅ IMPORTANT FIX: Use host.docker.internal
       - name: Run ZAP OWASP full scan
         uses: zaproxy/action-full-scan@v0.10.0
         with:
-          target: 'http://localhost:8080'
+          target: 'http://host.docker.internal:8080'
           cmd_options: '-a -J report.json -w report.md -r report.html'
 
-      # ✅ Upload correct report
-      - name: Upload html report
+      # ✅ Upload reports
+      - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
           name: DAST_Report
@@ -73,7 +75,8 @@ jobs:
             report.json
             report.md
 
-      - name: Stop docker
+      # ✅ Cleanup
+      - name: Stop container
         if: always()
         run: |
           docker stop demoApp || true
