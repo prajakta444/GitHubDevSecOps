@@ -7,8 +7,8 @@ VOLUME /tmp
 # ✅ Copy built JAR from target folder
 COPY target/*.jar app.jar
 
-ENV PORT 5000
-EXPOSE $PORT
+ENV SERVER_PORT=8080
+EXPOSE 8080
 
 # ✅ Run the application
 ENTRYPOINT ["java","-jar","/app.jar"]
