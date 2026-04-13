@@ -10,21 +10,32 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4   # ✅ upgraded
+        uses: actions/checkout@v4
 
-      - name: License Finder fix with mvnw
-        run: rm mvnw
-
-      - name: License Finder
-        uses: jmservera/license-finder-action@main   # ⚠️ still main (see note below)
+      # ✅ FIX 1: Setup Java (required for Maven projects)
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          permitted-licenses: MIT,Apache-2.0,BSD,EPL1
+          distribution: temurin
+          java-version: 11
+
+      # ✅ FIX 2: Build project to download dependencies (CRITICAL FIX)
+      - name: Build project
+        run: mvn clean install -DskipTests
+
+      # ❌ REMOVED: rm mvnw (this was breaking Maven in some cases)
+
+      # ✅ FIX 3: Correct license format (EPL1 → EPL-1.0)
+      - name: License Finder
+        uses: jmservera/license-finder-action@main
+        with:
+          permitted-licenses: MIT,Apache-2.0,BSD,EPL-1.0
           approved-dependencies: |
             hamcrest,hamcrest-core,hamcrest-library
             junit-jupiter,junit-jupiter-api,junit-jupiter-engine,javax.annotation-api
 
       - name: Publish Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v2   # ✅ cleaned version
+        uses: EnricoMi/publish-unit-test-result-action@v2
         if: always()
         with:
           junit_files: "license_finder_report.xml"
@@ -32,7 +43,7 @@ jobs:
 
       - name: Upload Dependency Review Report
         if: always()
-        uses: actions/upload-artifact@v4   # ✅ FIXED (was v2 ❌)
+        uses: actions/upload-artifact@v4
         with:
           name: license-finder-report
           path: ${{ github.workspace }}/license_finder_report.xml
