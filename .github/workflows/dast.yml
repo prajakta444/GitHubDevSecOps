@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ Login
+      # ✅ Login to GHCR
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
@@ -30,33 +30,40 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ✅ Run app container (host network)
+      # ✅ Run container
       - name: Run container
         run: |
           docker rm -f demoApp || true
           docker run -d --network host --name demoApp ${{ env.IMAGE_TAG }}
 
-      # ✅ Debug logs
+      # ✅ Verify container is running
+      - name: Check running container
+        run: docker ps
+
+      # ✅ Show logs (important for debugging)
       - name: Show container logs
         run: docker logs demoApp
 
-      # ✅ Wait for app
+      # ✅ FIXED: Wait for app (FAIL if not up)
       - name: Wait for app
         run: |
           for i in {1..40}; do
             if curl -s http://localhost:8080 > /dev/null; then
               echo "App is up!"
-              break
+              exit 0
             fi
             echo "Waiting..."
             sleep 5
           done
+          echo "App did NOT start"
+          docker logs demoApp
+          exit 1
 
-      # ✅ Test
+      # ✅ Test endpoint
       - name: Test endpoint
-        run: curl -v http://localhost:8080 || true
+        run: curl -v http://localhost:8080
 
-      # ✅ FIX: Run ZAP in SAME network
+      # ✅ Run ZAP scan
       - name: Run ZAP Scan
         run: |
           docker run --rm \
@@ -68,13 +75,13 @@ jobs:
             -r report.html \
             -J report.json || true
 
-      # ✅ ADD THIS STEP
+      # ✅ Debug files (to confirm reports exist)
       - name: Check generated reports
         run: |
           echo "Listing files..."
           ls -la
 
-      # ✅ Upload report
+      # ✅ Upload reports (FIXED YAML)
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
